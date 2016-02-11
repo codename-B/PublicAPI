@@ -53,9 +53,13 @@ public class HypixelAPI {
      * The API maintains it's own internal threadpool, so if you don't call this
      * the application will never exit.
      */
-    public void finish() throws IOException {
-        httpClient.close();
-        instance = null;
+    public void finish() {
+        try {
+            httpClient.close();
+            instance = null;
+        } catch(Exception e) {
+            throw new HypixelAPIException(e);
+        }
     }
 
     /**
