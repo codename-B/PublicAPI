@@ -60,6 +60,7 @@ public enum GameType {
      * @return The GameType associated with that key, or null if there isn't one.
      */
     public static GameType fromDatabase(String name) {
+        /*
         switch (name) {
             case "Quake":
                 return QUAKECRAFT;
@@ -94,6 +95,7 @@ public enum GameType {
             case "SuperSmash":
                 return SUPER_SMASH;
         }
+        */
         return null;
     }
 }

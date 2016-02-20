@@ -2,9 +2,6 @@ package net.hypixel.api;
 
 import com.google.common.base.Preconditions;
 import com.google.gson.Gson;
-import com.mastfrog.netty.http.client.HttpClient;
-import com.mastfrog.netty.http.client.ResponseFuture;
-import com.mastfrog.netty.http.client.ResponseHandler;
 
 import net.hypixel.api.reply.*;
 import net.hypixel.api.util.APIUtil;
@@ -12,8 +9,14 @@ import net.hypixel.api.util.Callback;
 import net.hypixel.api.util.HypixelAPIException;
 
 import org.apache.commons.lang3.StringEscapeUtils;
-
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.ResponseHandler;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.util.EntityUtils;
 import java.util.UUID;
+import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 @SuppressWarnings("unused")
@@ -22,12 +25,14 @@ public class HypixelAPI {
     private static HypixelAPI instance;
     private final Gson gson;
     private final ReentrantReadWriteLock lock;
+    private final ExecutorService exService = Executors.newCachedThreadPool();
     private final HttpClient httpClient;
     private UUID apiKey;
+
     private HypixelAPI() {
         gson = new Gson();
         lock = new ReentrantReadWriteLock();
-        httpClient = new HttpClient();
+        httpClient = HttpClientBuilder.create().build();
     }
 
     /**
@@ -48,8 +53,12 @@ public class HypixelAPI {
      * the application will never exit.
      */
     public void finish() {
-        httpClient.shutdown();
-        instance = null;
+        try {
+            exService.shutdown();
+            instance = null;
+        } catch(Exception e) {
+            throw new HypixelAPIException(e);
+        }
     }
 
     /**
@@ -105,11 +114,11 @@ public class HypixelAPI {
     public KeyReply getKeyInfoSync(UUID apiKey) throws HypixelAPIException {
         lock.readLock().lock();
         try {
-            SyncCallback<KeyReply> callback = new SyncCallback<>(KeyReply.class);
+            SyncCallback<KeyReply> callback = new SyncCallback<KeyReply>(KeyReply.class);
             if (doKeyCheck(callback)) {
                 try {
-                    get(BASE_URL + "key?key=" + apiKey.toString(), callback).await();
-                } catch (InterruptedException e) {
+                    get(BASE_URL + "key?key=" + apiKey.toString(), callback).get();
+                } catch (Exception e) {
                     throw new HypixelAPIException(e);
                 }
             }
@@ -156,7 +165,7 @@ public class HypixelAPI {
     public FindGuildReply findGuildSync(String name, String player) throws HypixelAPIException {
         lock.readLock().lock();
         try {
-            SyncCallback<FindGuildReply> callback = new SyncCallback<>(FindGuildReply.class);
+            SyncCallback<FindGuildReply> callback = new SyncCallback<FindGuildReply>(FindGuildReply.class);
             if (doKeyCheck(callback)) {
                 String args;
                 if (name != null) {
@@ -167,8 +176,8 @@ public class HypixelAPI {
                     throw new HypixelAPIException("Neither name nor player was provided!");
                 }
                 try {
-                    get(BASE_URL + "findGuild?key=" + apiKey.toString() + "&" + args, callback).await();
-                } catch (InterruptedException e) {
+                    get(BASE_URL + "findGuild?key=" + apiKey.toString() + "&" + args, callback).get();
+                } catch (Exception e) {
                     throw new HypixelAPIException(e);
                 }
             }
@@ -224,14 +233,14 @@ public class HypixelAPI {
     public GuildReply getGuildSync(String id) throws HypixelAPIException {
         lock.readLock().lock();
         try {
-            SyncCallback<GuildReply> callback = new SyncCallback<>(GuildReply.class);
+            SyncCallback<GuildReply> callback = new SyncCallback<GuildReply>(GuildReply.class);
             if (doKeyCheck(callback)) {
                 if (id == null) {
                     callback.callback(new HypixelAPIException("Guild id wasn't provided!"), null);
                 } else {
                     try {
-                        get(BASE_URL + "guild?key=" + apiKey.toString() + "&id=" + StringEscapeUtils.escapeHtml4(id), callback).await();
-                    } catch (InterruptedException e) {
+                        get(BASE_URL + "guild?key=" + apiKey.toString() + "&id=" + StringEscapeUtils.escapeHtml4(id), callback).get();
+                    } catch (Exception e) {
                         throw new HypixelAPIException(e);
                     }
                 }
@@ -281,11 +290,11 @@ public class HypixelAPI {
     public BoostersReply getBoostersSync() throws HypixelAPIException {
         lock.readLock().lock();
         try {
-            SyncCallback<BoostersReply> callback = new SyncCallback<>(BoostersReply.class);
+            SyncCallback<BoostersReply> callback = new SyncCallback<BoostersReply>(BoostersReply.class);
             if (doKeyCheck(callback)) {
                 try {
-                    get(BASE_URL + "boosters?key=" + apiKey.toString(), callback).await();
-                } catch (InterruptedException e) {
+                    get(BASE_URL + "boosters?key=" + apiKey.toString(), callback).get();
+                } catch (Exception e) {
                     throw new HypixelAPIException(e);
                 }
             }
@@ -330,14 +339,14 @@ public class HypixelAPI {
     public FriendsReply getFriendsSync(String player) throws HypixelAPIException {
         lock.readLock().lock();
         try {
-            SyncCallback<FriendsReply> callback = new SyncCallback<>(FriendsReply.class);
+            SyncCallback<FriendsReply> callback = new SyncCallback<FriendsReply>(FriendsReply.class);
             if (doKeyCheck(callback)) {
                 if (player == null) {
                     callback.callback(new HypixelAPIException("No player was provided!"), null);
                 } else {
                     try {
-                        get(BASE_URL + "friends?key=" + apiKey.toString() + "&player=" + StringEscapeUtils.escapeHtml4(player), callback).await();
-                    } catch (InterruptedException e) {
+                        get(BASE_URL + "friends?key=" + apiKey.toString() + "&player=" + StringEscapeUtils.escapeHtml4(player), callback).get();
+                    } catch (Exception e) {
                         throw new HypixelAPIException(e);
                     }
                 }
@@ -374,6 +383,21 @@ public class HypixelAPI {
         }
     }
 
+    public void getFriendsByUUID(String player, Callback<FriendsReply> callback) {
+        lock.readLock().lock();
+        try {
+            if (doKeyCheck(callback)) {
+                if (player == null) {
+                    callback.callback(new HypixelAPIException("No player was provided!"), null);
+                } else {
+                    get(BASE_URL + "friends?key=" + apiKey.toString() + "&uuid=" + StringEscapeUtils.escapeHtml4(player), callback);
+                }
+            }
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
     /**
      * Call this method to get a player's session
      * This method is synchronous and will block the thread until the request is completed and returned.
@@ -387,14 +411,14 @@ public class HypixelAPI {
     public SessionReply getSessionSync(String player) {
         lock.readLock().lock();
         try {
-            SyncCallback<SessionReply> callback = new SyncCallback<>(SessionReply.class);
+            SyncCallback<SessionReply> callback = new SyncCallback<SessionReply>(SessionReply.class);
             if (doKeyCheck(callback)) {
                 if (player == null) {
                     throw new HypixelAPIException("No player was provided!");
                 } else {
                     try {
-                        get(BASE_URL + "session?key=" + apiKey.toString() + "&player=" + StringEscapeUtils.escapeHtml4(player), callback).await();
-                    } catch (InterruptedException e) {
+                        get(BASE_URL + "session?key=" + apiKey.toString() + "&player=" + StringEscapeUtils.escapeHtml4(player), callback).get();
+                    } catch (Exception e) {
                         throw new HypixelAPIException(e);
                     }
                 }
@@ -446,7 +470,7 @@ public class HypixelAPI {
     public PlayerReply getPlayerSync(String player, UUID uuid) throws HypixelAPIException {
         lock.readLock().lock();
         try {
-            SyncCallback<PlayerReply> callback = new SyncCallback<>(PlayerReply.class);
+            SyncCallback<PlayerReply> callback = new SyncCallback<PlayerReply>(PlayerReply.class);
             if (doKeyCheck(callback)) {
                 String args;
                 if (player != null) {
@@ -457,8 +481,8 @@ public class HypixelAPI {
                     throw new HypixelAPIException("Neither player nor uuid was provided!");
                 }
                 try {
-                    get(BASE_URL + "player?key=" + apiKey.toString() + "&" + args, callback).await();
-                } catch (InterruptedException e) {
+                    get(BASE_URL + "player?key=" + apiKey.toString() + "&" + args, callback).get();
+                } catch (Exception e) {
                     throw new HypixelAPIException(e);
                 }
             }
@@ -522,23 +546,20 @@ public class HypixelAPI {
      * @param <T> The class of the callback
      * @return The ResponseHandler that wraps the callback
      */
-    private <T> ResponseHandler<String> buildResponseHandler(final Callback<T> callback) {
-        return new ResponseHandler<String>(String.class) {
+    private <T extends AbstractReply> ResponseHandler<HttpResponse> buildResponseHandler(final Callback<T> callback) {
+        return new ResponseHandler<HttpResponse>() {
             @Override
-            protected void receive(String obj) {
+            public HttpResponse handleResponse(HttpResponse obj) {
                 T value;
                 try {
-                    value = gson.fromJson(obj, callback.getClazz());
+                    value = gson.fromJson(EntityUtils.toString(obj.getEntity(), "UTF-8"), callback.getClazz());
                 } catch (Throwable t) {
+                    t.printStackTrace();
                     callback.callback(t, null);
-                    return;
+                    return obj;
                 }
                 callback.callback(null, value);
-            }
-
-            @Override
-            protected void onError(Throwable err) {
-                callback.callback(err, null);
+                return obj;
             }
         };
     }
@@ -549,8 +570,13 @@ public class HypixelAPI {
      * @param url The URL to send the request to
      * @param callback The callback to execute
      */
-    private ResponseFuture get(String url, Callback<?> callback) {
-        return httpClient.get().setURL(url).execute(buildResponseHandler(callback));
+    private Future<HttpResponse> get(final String url, final Callback<?> callback) {
+        return exService.submit(new Callable<HttpResponse>() {
+            @Override
+            public HttpResponse call() throws Exception {
+                return httpClient.execute(new HttpGet(url), buildResponseHandler(callback));
+            }
+        });
     }
 
     private class SyncCallback<T extends AbstractReply> extends Callback<T> {

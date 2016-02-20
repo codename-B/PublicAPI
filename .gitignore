@@ -5,3 +5,4 @@
 target
 Example/target
 Website/javadocs
+out/*
